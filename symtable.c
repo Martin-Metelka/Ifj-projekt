@@ -1,4 +1,27 @@
 #include "symtable.h"
+#include <stdlib.h>
+#include <string.h>
+
+// Declarations of static helper functions
+static bool bst_insert(BSTNode **tree, const char *key, SymbolData *data);
+static bool bst_find(BSTNode *tree, const char *key, SymbolData **return_data);
+static bool bst_delete(BSTNode **tree, const char *key);
+static bool bst_replace_by_rightmost(BSTNode *target, BSTNode **tree);
+static void bst_free(BSTNode *tree);
+static char* my_strdup(const char* s);
+
+/**
+ * Duplicates a string
+ * @param s string to duplicate
+ * @return pointer to duplicated string, NULL on failure
+ */
+static char* my_strdup(const char* s) {
+    if (!s) return NULL;
+    size_t len = strlen(s) + 1;
+    char *copy = malloc(len);
+    if (copy) memcpy(copy, s, len);
+    return copy;
+}
 
 /**
  * Initializes the symbol table
@@ -43,7 +66,7 @@ static bool bst_insert(BSTNode** tree, const char* key, SymbolData* data){
             return false; // Memory allocation failure
         }
         // Allocate a copy of the key
-        new_node->key = strdup(key);
+        new_node->key = my_strdup(key);
         if (new_node->key == NULL) {
             free(new_node);
             return false; // Memory allocation failure
@@ -287,7 +310,7 @@ SymbolData* symdata_create_func(ifj25_symbol_kind_t kind, int arity){
  * Frees symbol data
  * @param data symbol data to free
  */
-static void symdata_free(SymbolData *data){
+void symdata_free(SymbolData *data){
     if (data == NULL) {
         return;
     }
