@@ -278,6 +278,12 @@ Token read_number(Scanner* scanner) {
         advance(scanner);
         is_hex = true;
         
+        if (!isxdigit(scanner->current_char)) {
+            // Invalid hex literal like "0x"
+            while (pos > 0) buffer[--pos] = '\0';
+            return create_token(TOKEN_ERROR, "Invalid hexadecimal literal", start_line, start_column);
+        }
+
         while (isxdigit(scanner->current_char)) {
             if (pos < 255) {
                 buffer[pos++] = scanner->current_char;
@@ -295,12 +301,19 @@ Token read_number(Scanner* scanner) {
         
         // Check for decimal point
         if (scanner->current_char == '.') {
-            is_float = true;
+            
             if (pos < 255) {
                 buffer[pos++] = scanner->current_char;
             }
             advance(scanner);
             
+            if (!isdigit(scanner->current_char)) {
+                // Invalid like "."
+                while (pos > 0) buffer[--pos] = '\0';
+                return create_token(TOKEN_ERROR, "Invalid decimal literal", start_line, start_column);
+            }
+
+            is_float = true;
             while (isdigit(scanner->current_char)) {
                 if (pos < 255) {
                     buffer[pos++] = scanner->current_char;
@@ -311,7 +324,6 @@ Token read_number(Scanner* scanner) {
         
         // Check for exponent
         if (scanner->current_char == 'e' || scanner->current_char == 'E') {
-            is_float = true;
             if (pos < 255) {
                 buffer[pos++] = scanner->current_char;
             }
@@ -325,6 +337,12 @@ Token read_number(Scanner* scanner) {
                 advance(scanner);
             }
             
+            if (!isdigit(scanner->current_char)) {
+            // Invalid like "1e" or "1e+"
+            while (pos > 0) buffer[--pos] = '\0';
+            return create_token(TOKEN_ERROR, "Invalid exponent in float literal", start_line, start_column);
+            }
+            is_float = true;
             while (isdigit(scanner->current_char)) {
                 if (pos < 255) {
                     buffer[pos++] = scanner->current_char;
@@ -351,6 +369,10 @@ Token read_number(Scanner* scanner) {
 char read_escape_sequence(Scanner* scanner) {
     advance(scanner); // Skip backslash
     
+    if (scanner->is_eof_reached) {
+        return '\0';  // Error: EOF after backslash
+    }
+
     switch (scanner->current_char) {
         case 'n': advance(scanner); return '\n';
         case 'r': advance(scanner); return '\r';
@@ -363,18 +385,27 @@ char read_escape_sequence(Scanner* scanner) {
             char hex[3] = {0};
             if (isxdigit(scanner->current_char)) {
                 hex[0] = scanner->current_char;
-                advance(scanner);
-                if (isxdigit(scanner->current_char)) {
-                    hex[1] = scanner->current_char;
-                    advance(scanner);
-                }
+                advance(scanner);                
+            }else {
+                return '\0';  // Missing first hex digit - error
             }
+
+            if (isxdigit(scanner->current_char)) {
+                hex[1] = scanner->current_char;
+                advance(scanner);
+            }else {
+                return '\0';  // Missing second hex digit - error
+            }
+
+            if (isxdigit(scanner->current_char)) {
+                // Too many hex digits - error
+                return '\0';
+            }
+
             return (char)strtol(hex, NULL, 16);
         }
         default:
-            char c = scanner->current_char;
-            advance(scanner);
-            return c;
+            return '\0';
     }
 }
 
@@ -395,6 +426,7 @@ Token read_string(Scanner* scanner) {
     bool is_multiline = false;
     if (scanner->current_char == '"' && peek(scanner) == '"' && peek2(scanner) == '"') {
         is_multiline = true;
+        advance(scanner); // Skip first quote
         advance(scanner); // Skip second quote
         advance(scanner); // Skip third quote
     } else {
@@ -410,6 +442,11 @@ Token read_string(Scanner* scanner) {
                 advance(scanner); // Skip third quote
                 break;
             }
+
+            if (scanner->is_eof_reached) {
+                buffer[pos] = '\0';
+                return create_token(TOKEN_ERROR, "Unclosed multiline string", start_line, start_column);
+            }
             
             if (pos < 1023) {
                 buffer[pos++] = scanner->current_char;
@@ -419,15 +456,23 @@ Token read_string(Scanner* scanner) {
     } else {
         // Regular string with escape sequences
         while (scanner->current_char != quote_char && !scanner->is_eof_reached) {
+            if (scanner->current_char == '\n' || scanner->is_eof_reached) {
+                buffer[pos] = '\0';
+                return create_token(TOKEN_ERROR, "Unclosed multiline string", start_line, start_column);
+            }
+
             if (scanner->current_char == '\\') {
                 char escaped = read_escape_sequence(scanner);
+                if (escaped == '\0') {
+                    // Invalid escape sequence
+                    buffer[pos] = '\0';
+                    return create_token(TOKEN_ERROR, "Invalid escape sequence", start_line, start_column);
+                }
+
                 if (pos < 1023) {
                     buffer[pos++] = escaped;
                 }
-            } else if (scanner->current_char == '\n') {
-                // Strings cannot span multiple lines (except multiline)
-                break;
-            } else {
+            }else {
                 if (pos < 1023) {
                     buffer[pos++] = scanner->current_char;
                 }
@@ -437,6 +482,10 @@ Token read_string(Scanner* scanner) {
         
         if (scanner->current_char == quote_char) {
             advance(scanner); // Skip closing quote
+        }else {
+            // EOF before closing quote
+            buffer[pos] = '\0';
+            return create_token(TOKEN_ERROR, "Unclosed string literal", start_line, start_column);
         }
     }
     
@@ -497,6 +546,11 @@ Token get_next_token(Scanner* scanner) {
     
     char current = scanner->current_char;
     
+    // Strings
+    if (current == '"') {
+        return read_string(scanner);
+    }
+    
     // Identifiers and keywords
     if (isalpha(current) || current == '_') {
         return read_identifier(scanner);
@@ -507,10 +561,7 @@ Token get_next_token(Scanner* scanner) {
         return read_number(scanner);
     }
     
-    // Strings
-    if (current == '"') {
-        return read_string(scanner);
-    }
+    
     
     // Single character tokens
     switch (current) {
