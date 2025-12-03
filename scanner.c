@@ -85,7 +85,7 @@ char advance(Scanner* scanner) {
  * @param scanner 
  * @return next char in line
  */
-char peek(Scanner* scanner) {
+int peek(Scanner* scanner) {
     if (scanner->is_eof_reached) {
         return '\0';
     }
@@ -110,7 +110,7 @@ void skip_whitespace(Scanner* scanner) {
         }
         
         if (scanner->current_char == '/') {
-            char next = peek(scanner);
+            char next = (char)peek(scanner);
             if (next == '/') {
                 // Line comment
                 while (scanner->current_char != '\n' && !scanner->is_eof_reached) {
@@ -268,7 +268,6 @@ Token read_number(Scanner* scanner) {
     char buffer[256];
     int pos = 0;
     bool is_float = false;
-    bool is_hex = false;
     
     // Check for hexadecimal
     if (scanner->current_char == '0' && (peek(scanner) == 'x' || peek(scanner) == 'X')) {
@@ -276,7 +275,6 @@ Token read_number(Scanner* scanner) {
         advance(scanner);
         buffer[pos++] = scanner->current_char;
         advance(scanner);
-        is_hex = true;
         
         if (!isxdigit(scanner->current_char)) {
             // Invalid hex literal like "0x"
@@ -503,7 +501,7 @@ Token read_string(Scanner* scanner) {
  * @param scanner 
  * @return char 2 characters ahead
  */
-char peek2(Scanner* scanner) {
+int peek2(Scanner* scanner) {
     if (scanner->is_eof_reached) {
         return '\0';
     }
