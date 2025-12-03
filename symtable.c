@@ -2,13 +2,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Declarations of static helper functions
-static bool bst_insert(BSTNode **tree, const char *key, SymbolData *data);
+// Static helper function declarations
+static BSTNode* bst_insert(BSTNode **tree, const char *key, SymbolData *data);
 static bool bst_find(BSTNode *tree, const char *key, SymbolData **return_data);
 static bool bst_delete(BSTNode **tree, const char *key);
 static bool bst_replace_by_rightmost(BSTNode *target, BSTNode **tree);
 static void bst_free(BSTNode *tree);
 static char* my_strdup(const char* s);
+static SymbolData* symdata_dup(SymbolData* data);
+static int height(BSTNode *n);
+static int max(int a, int b);
+static int get_balance(BSTNode *n);
+static BSTNode* rotate_right(BSTNode *y);
+static BSTNode* rotate_left(BSTNode *y);
+static BSTNode* balance_node(BSTNode *node);
+
 
 /**
  * Duplicates a string
@@ -21,6 +29,165 @@ static char* my_strdup(const char* s) {
     char *copy = malloc(len);
     if (copy) memcpy(copy, s, len);
     return copy;
+}
+
+/**
+ * Duplicates SymbolData
+ * @param data SymbolData to duplicate
+ * @return pointer to duplicated SymbolData, NULL on failure
+ */
+static SymbolData* symdata_dup(SymbolData* data){
+    if (!data) return NULL;
+
+    SymbolData* copy = malloc(sizeof(SymbolData));
+    if (!copy) return NULL;
+
+    copy->kind = data->kind;
+    if (data->kind == IFJ_SYMBOL_VAR) {
+        copy->var = malloc(sizeof(VarData));
+        if (!copy->var) { free(copy); return NULL; }
+        copy->var->type = data->var->type;
+        if (data->var->type == IFJ_TYPE_STRING && data->var->value.str) {
+            copy->var->value.str = my_strdup(data->var->value.str);
+        } else {
+            copy->var->value = data->var->value;
+        }
+        copy->func = NULL;
+    } else {
+        copy->func = malloc(sizeof(FuncData));
+        if (!copy->func) { free(copy); return NULL; }
+        copy->func->arity = data->func->arity;
+        copy->func->params = NULL;
+
+        // Deep copy parameters
+        Param* last = NULL;
+        for (Param* p = data->func->params; p; p = p->next){
+            Param* new_param = malloc(sizeof(Param));
+            new_param->name = my_strdup(p->name);
+            new_param->next = NULL;
+            if (last) last->next = new_param;
+            else copy->func->params = new_param;
+            last = new_param;
+        }
+        copy->var = NULL;
+    }
+
+    return copy;
+}
+
+/**
+ * Gets the height of a BST node
+ * @param n BST node
+ * @return height of the node, 0 if NULL
+ */
+static int height(BSTNode *n) {
+    return n ? n->height : 0;
+}
+
+/**
+ * Gets the maximum of two integers
+ * @param a first integer
+ * @param b second integer
+ * @return maximum of a and b
+ */
+static int max(int a, int b) {
+    return (a > b) ? a : b;
+}
+
+/**
+ * Gets the balance factor of a BST node
+ * @param n BST node
+ * @return balance factor (height of left subtree - height of right subtree)
+ */
+static int get_balance(BSTNode *n) {
+    return n ? height(n->left) - height(n->right) : 0;
+}
+
+/**
+ * Performs a right rotation on the given BST node
+ * @param y BST node to rotate
+ * @return new root after rotation
+ */
+/*
+     y              x
+    / \            / \
+   x   T3   ->    T1  y
+  / \                / \
+ T1 T2              T2 T3
+*/
+static BSTNode* rotate_right(BSTNode *y) {
+    BSTNode *x = y->left;
+    BSTNode *T2 = x->right;
+
+    // Perform rotation
+    x->right = y;
+    y->left = T2;
+
+    // Update heights
+    y->height = max(height(y->left), height(y->right)) + 1;
+    x->height = max(height(x->left), height(x->right)) + 1;
+
+    return x; // new root
+}
+
+/**
+ * Performs a left rotation on the given BST node
+ * @param y BST node to rotate
+ * @return new root after rotation
+ */
+/*
+   y                x
+  / \              / \
+ T1  x     ->     y  T3
+    / \          / \
+   T2 T3        T1 T2
+*/
+static BSTNode* rotate_left(BSTNode *y) {
+    BSTNode *x = y->right;
+    BSTNode *T2 = x->left;
+
+    // Perform rotation
+    x->left = y;
+    y->right = T2;
+
+    // Update heights
+    y->height = max(height(y->left), height(y->right)) + 1;
+    x->height = max(height(x->left), height(x->right)) + 1;
+
+    return x; // new root
+}
+
+/**
+ * Balances the given BST node
+ * @param node BST node to balance
+ * @return new root after balancing
+ */
+static BSTNode* balance_node(BSTNode *node) {
+    int balance = get_balance(node);
+
+    // LL case
+    if (balance > 1 && get_balance(node->left) >= 0) {
+        return rotate_right(node);
+    }
+
+    // LR case
+    if (balance > 1 && get_balance(node->left) < 0) {
+        node->left = rotate_left(node->left);
+        return rotate_right(node);
+    }
+
+    // RR case
+    if (balance < -1 && get_balance(node->right) <= 0) {
+        return rotate_left(node);
+    }
+
+    // RL case
+    if (balance < -1 && get_balance(node->right) > 0) {
+        node->right = rotate_right(node->right);
+        return rotate_left(node);
+    }
+
+    return node; // no rebalance needed
 }
 
 /**
@@ -48,7 +215,7 @@ bool symtable_insert(SymTable *table, const char *key, SymbolData *data){
         return false;
     }
     // Insert into BST
-    return bst_insert(&table->root, key, data);
+    return bst_insert(&table->root, key, data) != NULL;
 }
 
 /**
@@ -56,41 +223,45 @@ bool symtable_insert(SymTable *table, const char *key, SymbolData *data){
  * @param tree current BST node
  * @param key  key to insert
  * @param data data associated with the symbol
- * @return true on success, false on memory allocation failure
+ * @return pointer to inserted node, NULL on failure
  */
-static bool bst_insert(BSTNode** tree, const char* key, SymbolData* data){
+static BSTNode* bst_insert(BSTNode** tree, const char* key, SymbolData* data){
     if (*tree == NULL) {
         // Create new node
         BSTNode* new_node = malloc(sizeof(BSTNode));
         if (new_node == NULL) {
-            return false; // Memory allocation failure
+            return NULL; // Memory allocation failure
         }
         // Allocate a copy of the key
         new_node->key = my_strdup(key);
         if (new_node->key == NULL) {
             free(new_node);
-            return false; // Memory allocation failure
+            return NULL; // Memory allocation failure
         }
         // Allocate a copy of SymbolData
         new_node->data = data;
         new_node->left = NULL;
         new_node->right = NULL;
+        new_node->height = 1; // New node is initially added at leaf
         *tree = new_node;
-        return true;
+        return *tree;
     }
 
     // Traverse left or right based on key comparison
     if (strcmp(key, (*tree)->key) < 0) {
-        return bst_insert(&(*tree)->left, key, data);
+        (*tree)->left = bst_insert(&(*tree)->left, key, data);
+    } else if (strcmp(key, (*tree)->key) > 0) {
+        (*tree)->right = bst_insert(&(*tree)->right, key, data);
+    } else {
+        // Node found, rewrite existing data
+        symdata_free((*tree)->data); // Free old data
+        (*tree)->data = data;
+        return *tree;
     }
-    if (strcmp(key, (*tree)->key) > 0) {
-        return bst_insert(&(*tree)->right, key, data);
-    }
-    
-    // Node found, rewrite existing data
-    symdata_free((*tree)->data); // Free old data
-    (*tree)->data = data;
-    return true;
+    // Update height
+    (*tree)->height = 1 + max(height((*tree)->left), height((*tree)->right));
+    *tree = balance_node(*tree);
+    return *tree;
 }
 
 /**
@@ -164,44 +335,53 @@ static bool bst_delete(BSTNode** tree, const char* key){
     }
 
     if (strcmp(key, (*tree)->key) < 0) {
-        return bst_delete(&(*tree)->left, key);
+        bool deleted = bst_delete(&(*tree)->left, key);
+        if (!deleted) return deleted;
+    } else if (strcmp(key, (*tree)->key) > 0) {
+        bool deleted = bst_delete(&(*tree)->right, key);
+        if (!deleted) return deleted;
+    } else {
+        // Node found
+        BSTNode* node_to_delete = *tree;
+
+        // No children
+        if (node_to_delete->left == NULL && node_to_delete->right == NULL) {
+            symdata_free(node_to_delete->data);
+            free(node_to_delete->key);
+            free(node_to_delete);
+            *tree = NULL;
+            return true;
+        } 
+
+        // One child (right)
+        else if (node_to_delete->left == NULL) {
+            *tree = node_to_delete->right;
+            symdata_free(node_to_delete->data);
+            free(node_to_delete->key);
+            free(node_to_delete);
+        }
+        // One child (left)
+        else if (node_to_delete->right == NULL) { 
+            *tree = node_to_delete->left;
+            symdata_free(node_to_delete->data);
+            free(node_to_delete->key);
+            free(node_to_delete);
+        } 
+        else {
+            // Two children
+            bool replaced = bst_replace_by_rightmost(node_to_delete, &node_to_delete->left);
+            if (!replaced) {
+                return false; // Failure in replacement
+            }
+        }
     }
-    if (strcmp(key, (*tree)->key) > 0) {
-        return bst_delete(&(*tree)->right, key);
+    // Update height and balance
+    if (*tree != NULL) {
+        (*tree)->height = 1 + max(height((*tree)->left), height((*tree)->right));
+        *tree = balance_node(*tree);    
     }
 
-    // Node found
-    BSTNode* node_to_delete = *tree;
-
-    // No children
-    if (node_to_delete->left == NULL && node_to_delete->right == NULL) {
-        symdata_free(node_to_delete->data);
-        free(node_to_delete->key);
-        free(node_to_delete);
-        *tree = NULL;
-        return true;
-    }
-
-    // One child (right)
-    if (node_to_delete->left == NULL) {
-        *tree = node_to_delete->right;
-        symdata_free(node_to_delete->data);
-        free(node_to_delete->key);
-        free(node_to_delete);
-        return true;
-    }
-
-    // One child (left)
-    if (node_to_delete->right == NULL) { 
-        *tree = node_to_delete->left;
-        symdata_free(node_to_delete->data);
-        free(node_to_delete->key);
-        free(node_to_delete);
-        return true;
-    }
-
-    // Two children
-    return bst_replace_by_rightmost(node_to_delete, &node_to_delete->left);
+    return true;
 }
 
 /**
@@ -214,24 +394,32 @@ static bool bst_replace_by_rightmost(BSTNode* target, BSTNode** tree){
     if (tree == NULL || *tree == NULL) {
         return false;
     }
-
-    if ((*tree)->right != NULL) {
-        return bst_replace_by_rightmost(target, &(*tree)->right);
-    }
-
-    // Rightmost node found
-    // Transfer key and data
-    free(target->key);
-    symdata_free(target->data);
-    target->key = (*tree)->key;
-    target->data = (*tree)->data;
     
-    // Remove rightmost node
-    BSTNode* node_to_delete = *tree;
-    *tree = (*tree)->left; // Move left child up
-    free(node_to_delete);
-
-    return true;
+    bool replaced = false;
+    if ((*tree)->right != NULL) {
+        replaced = bst_replace_by_rightmost(target, &(*tree)->right);
+    } else {
+        // Rightmost node found
+        // Transfer key and data
+        BSTNode* node_to_delete = *tree;
+        free(target->key);
+        symdata_free(target->data);
+        target->key = my_strdup(node_to_delete->key);
+        target->data = symdata_dup(node_to_delete->data);
+    
+        // Remove rightmost node
+        *tree = node_to_delete->left;
+        symdata_free(node_to_delete->data);
+        free(node_to_delete->key);
+        free(node_to_delete);
+        replaced = true;
+    }
+    // Update height and balance
+    if (*tree != NULL) {
+        (*tree)->height = 1 + max(height((*tree)->left), height((*tree)->right));
+        *tree = balance_node(*tree);    
+    }
+    return replaced;
 }
 
 /**
@@ -247,6 +435,7 @@ void symtable_free(SymTable *table){
     table->root = NULL;
     free(table);
 }
+
 /**
  * Frees BST nodes recursively
  * @param tree current BST node
