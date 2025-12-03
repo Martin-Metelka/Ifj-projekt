@@ -1,3 +1,14 @@
+/**
+ * Project: Implementace překladače jazyka IFJ25.
+ *
+ * parser.c
+ * syntactical analysis and code generation
+ *
+ * @author Jakub Gono - xgonoja00
+ * @author Vojtěch Kabelka - xkabelv00
+ * @author Filip Kachyňa - xkachyf00
+ * @author Martin Metelka - xmetelm00
+ */
 #include "parser.h"
 #include <stdlib.h>
 #include <string.h>
