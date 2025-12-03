@@ -1,7 +1,7 @@
 /**
  * Project: Implementace překladače jazyka IFJ25.
  *
- * parser.c
+ * parser.h
  * syntactical analysis and code generation
  *
  * @author Jakub Gono - xgonoja00
