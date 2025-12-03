@@ -1,3 +1,14 @@
+/**
+ * Project: Implementace překladače jazyka IFJ25.
+ *
+ * scanner.c
+ * lexical analysis
+ *
+ * @author Jakub Gono - xgonoja00
+ * @author Vojtěch Kabelka - xkabelv00
+ * @author Filip Kachyňa - xkachyf00
+ * @author Martin Metelka - xmetelm00
+ */
 #include "scanner.h"
 
 
