@@ -96,7 +96,8 @@ void token_free(Token* token);
 const char* token_type_to_string(TokenType type);
 
 char advance(Scanner* scanner);
-char peek(Scanner* scanner);
+int peek(Scanner* scanner);
+int peek2(Scanner* scanner);
 void skip_whitespace(Scanner* scanner);
 void skip_comment(Scanner* scanner);
 bool is_keyword(const char* str);
