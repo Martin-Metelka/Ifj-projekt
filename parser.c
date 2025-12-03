@@ -238,7 +238,7 @@ void parse_prolog(Parser* parser) {
     if (!expect(parser, TOKEN_STRING_LITERAL)) return;
     
     // Check if string is "ifj25"
-    if (!parser->current_token.value || strcmp(parser->current_token.value, "\"ifj25\"") != 0) {
+    if (!parser->current_token.value || strcmp(parser->current_token.value, "ifj25") != 0) {
         error(parser, SYNTAX_ERROR, "Expected string \"ifj25\" in import");
         return;
     }
@@ -628,13 +628,7 @@ void parse_assignment(Parser* parser) {
         }
     }
     
-    next_token(parser);
     
-    // Expect =
-    if (!expect(parser, TOKEN_ASSIGN)) {
-        free(var_name);
-        return;
-    }
     next_token(parser);
     
     // Check if this is a function call
