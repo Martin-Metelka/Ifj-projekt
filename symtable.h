@@ -54,6 +54,7 @@ typedef struct SymbolData {
 typedef struct BSTNode {
     char *key; // identifier
     SymbolData *data;
+    int height; // for balancing
     struct BSTNode *left;
     struct BSTNode *right;
 } BSTNode;
